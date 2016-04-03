@@ -1,107 +1,103 @@
 module Pod
   class Command
     class Repo
-      # This is an example of a cocoapods plugin adding a top-level subcommand
-      # to the 'pod' command.
-      #
-      # You can also create subcommands of existing or new commands. Say you
-      # wanted to add a subcommand to `list` to show newly deprecated pods,
-      # (e.g. `pod list deprecated`), there are a few things that would need
-      # to change.
-      #
-      # - move this file to `lib/pod/command/list/deprecated.rb` and update
-      #   the class to exist in the the Pod::Command::List namespace
-      # - change this class to extend from `List` instead of `Command`. This
-      #   tells the plugin system that it is a subcommand of `list`.
-      # - edit `lib/cocoapods_plugins.rb` to require this file
-      #
-      # @todo Create a PR to add your plugin to CocoaPods/cocoapods.org
-      #       in the `plugins.json` file, once your plugin is released.
-      #
       class Shard < Repo
-        self.summary = 'Short description of cocoapods-repo-shard.'
-
-        self.description = <<-DESC
-          Longer description of cocoapods-repo-shard.
-        DESC
+        self.summary = 'Shards a CocoaPods specs repo in place.'
 
         self.arguments = [
-          CLAide::Argument.new('NAME'),
+          CLAide::Argument.new('NAME', true),
         ]
+
+        attr_reader :source
+        attr_reader :name
+        attr_reader :lengths
 
         def self.options
           [
-            ['--lengths=l1,l2,...', 'the lengths'],
+            ['--lengths=l1,l2,...', 'The prefix lengths to shard the source with'],
           ].concat(super)
         end
 
         def initialize(argv)
           @name = argv.shift_argument
-          @lengths = argv.flag('lengths')
+          @lengths = argv.option('lengths')
           super
         end
 
         def validate!
           help! 'A repo name is required.' unless @name
-          if @lengths
-            @lengths = @lengths.split(',').map(&:to_i)
-            help! 'all l must be +' if @lengths.any? { |l| l <= 0 }
+
+          @source = config.sources_manager.sources([@name]).first
+          help! "No repo named `#{@name}` found." unless source.specs_dir
+          unless source.specs_dir.basename.to_s == 'Specs'
+            raise Informative, 'Cannot shard a repo that does not use the `Specs` directory'
           end
+
+          if lengths
+            @lengths = lengths.split(',').map(&:to_i)
+            help! 'All lengths must be positive' if lengths.any? { |l| l <= 0 }
+          end
+
           super
         end
 
+        extend Executable
+        executable :git
+
         def run
-          require 'cocoapods'
-          require 'digest/md5'
           require 'fileutils'
-          require 'tmpdir'
 
-          source = Pod::SourcesManager.master.first
-          names = source.pods
-
-          new_dir = Pathname('~/.cocoapods/repos/master-experimental').expand_path
-          new_dir.rmtree
-
-          specs = new_dir.join('Specs')
-          specs.mkpath
-
-          lengths = [1, 1, 1]
-
-          hashes = names.map { |n| [n, Digest::MD5.hexdigest(n)] }
-          paths = hashes.map do |name, hash|
-            lengths.each_with_object([]) { |l, a| a << hash[a.map(&:size).reduce(0, &:+), l] } << name
+          @lengths ||= ideal_lengths(source.pods.size).tap do |ideal_lengths|
+            UI.puts "Sharding to ideal prefix lengths #{ideal_lengths.inspect}"
           end
 
-          paths.each do |components|
-            name = components.pop
-            path = specs.join(*components)
-            path.mkpath
-            FileUtils.cp_r(source.send(:specs_dir) + name, path + name)
+          new_specs_dir = source.repo + 'temp_specs_dir'
+          new_specs_dir.mkpath
+
+          new_metadata = Source::Metadata.new(source.metadata.to_hash.update('prefix_lengths' => @lengths))
+
+          UI.puts 'Copying specs into sharded structure'
+          source.pods.each do |name|
+            path = new_specs_dir.join(new_metadata.path_fragment(name))
+            path.parent.mkpath
+            FileUtils.cp_r(source.pod_path(name), path)
           end
 
-          Dir.chdir(new_dir) do
-            `git init .`
-            `git add .`
-            `git commit -am 'Initial commit'`
+          UI.puts 'Replacing existing specs directory with sharded copy'
+          source.specs_dir.rmtree
+          FileUtils.mv(new_specs_dir, source.specs_dir)
+
+          source.metadata_path.open('w') { |f| f.write(YAML.dump(new_metadata.to_hash)) }
+          source.send(:refresh_metadata)
+
+          UI.section 'Committing changes to the specs repo' do
+            Dir.chdir(source.repo) do
+              git! 'add', 'Specs'
+              git! 'commit', '-m',
+                   "Sharded to use #{lengths.inspect} prefix lengths"
+            end
           end
+
+          UI.puts "Finished sharding the #{source.name} repo.\n" \
+                  "After verifying the changes, push the changes in #{UI.path(source.repo)} upstream."
+        ensure
+          new_specs_dir.rmtree if new_specs_dir && new_specs_dir.directory?
         end
 
         private
 
-        def temp_specs_dir
-          @temp_specs_dir ||= Pathname(Dir.mktmpdir)
-        end
-
         def ideal_lengths(total)
           possibilities = (0..3).cycle.first(4 * 4).permutation(4).to_a.
-            each(&:sort!).uniq.each { |perm| perm.delete(0) }
+                          each(&:sort!).uniq.each { |perm| perm.delete(0) }
           possibilities.min_by do |perm|
-            cost(total, perm) + 0.75 * cost(total * 2, perm)
+            cost(total, perm) +
+              0.75 * cost(total * 2, perm) +
+              0.33 * cost(total * 4, perm)
           end
         end
 
         def cost(total, lengths)
-          (total / (16**lengths.reduce(&:+))) +
+          (total / (16**lengths.reduce(0, &:+))) +
             lengths.reduce(0) { |s, l| s + 16**l }
         end
       end

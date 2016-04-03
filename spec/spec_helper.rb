@@ -1,18 +1,9 @@
-require 'pathname'
-ROOT = Pathname.new(File.expand_path('../../', __FILE__))
-$LOAD_PATH.unshift((ROOT + 'lib').to_s)
-$LOAD_PATH.unshift((ROOT + 'spec').to_s)
-
 require 'bundler/setup'
-require 'bacon'
-require 'mocha-on-bacon'
-require 'pretty_bacon'
-require 'pathname'
 require 'cocoapods'
 
-Mocha::Configuration.prevent(:stubbing_non_existent_method)
+$LOAD_PATH.unshift(File.expand_path('../../lib', __FILE__))
 
-require 'cocoapods_plugin'
+require File.expand_path('../../lib/cocoapods_plugin', __FILE__)
 
 #-----------------------------------------------------------------------------#
 
@@ -47,3 +38,13 @@ module Pod
 end
 
 #-----------------------------------------------------------------------------#
+
+RSpec.configure do |c|
+  c.before(:each) do
+    Pod::UI.output = ''
+    Pod::UI.warnings = ''
+
+    Pod::Config.instance.repos_dir = Pathname(__FILE__) + '../fixtures/spec-repos'
+    Pod::Config.instance.verbose = false
+  end
+end
