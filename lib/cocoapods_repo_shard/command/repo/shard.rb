@@ -46,6 +46,7 @@ module Pod
 
         def run
           require 'fileutils'
+          require 'yaml'
 
           @lengths ||= ideal_lengths(source.pods.size).tap do |ideal_lengths|
             UI.puts "Sharding to ideal prefix lengths #{ideal_lengths.inspect}"
@@ -67,12 +68,14 @@ module Pod
           source.specs_dir.rmtree
           FileUtils.mv(new_specs_dir, source.specs_dir)
 
+          UI.puts 'Writing updated source metadata'
           source.metadata_path.open('w') { |f| f.write(YAML.dump(new_metadata.to_hash)) }
           source.send(:refresh_metadata)
 
           UI.section 'Committing changes to the specs repo' do
             Dir.chdir(source.repo) do
-              git! 'add', 'Specs'
+              git! 'add', source.specs_dir
+              git! 'add', source.metadata_path
               git! 'commit', '-m',
                    "Sharded to use #{lengths.inspect} prefix lengths"
             end
