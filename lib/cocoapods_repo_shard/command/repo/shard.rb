@@ -2,7 +2,7 @@ module Pod
   class Command
     class Repo
       class Shard < Repo
-        self.summary = 'Shards a CocoaPods specs repo in place.'
+        self.summary = 'Shards a CocoaPods specs repo in-place.'
 
         self.arguments = [
           CLAide::Argument.new('NAME', true),

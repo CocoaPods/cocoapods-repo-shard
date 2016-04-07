@@ -8,12 +8,11 @@ Gem::Specification.new do |spec|
   spec.version       = CocoapodsRepoShard::VERSION
   spec.authors       = ['Samuel Giddins']
   spec.email         = ['segiddins@segiddins.me']
-  spec.description   = 'A short description of cocoapods-repo-shard.'
-  spec.summary       = 'A longer description of cocoapods-repo-shard.'
+  spec.summary       = 'Shard a CocoaPods specs repository.'
   spec.homepage      = 'https://github.com/CocoaPods/cocoapods-repo-shard'
   spec.license       = 'MIT'
 
-  spec.files         = `git ls-files`.split($INPUT_RECORD_SEPARATOR)
+  spec.files         = `git ls-files -z`.split("\0")
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ['lib']
