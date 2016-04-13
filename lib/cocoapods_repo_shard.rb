@@ -1,1 +1,1 @@
-require 'cocoapods-repo-shard/gem_version'
+require 'cocoapods_repo_shard/gem_version'

@@ -1,1 +1,1 @@
-require 'cocoapods-repo-shard/command'
+require 'cocoapods_repo_shard/command'
