@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    cocoapods-repo-shard (0.0.1)
+    cocoapods-repo-shard (1.0.0)
 
 GEM
   remote: https://rubygems.org/
