@@ -4,7 +4,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :development do
-  gem 'cocoapods', '1.0.0.beta.7'
+  gem 'cocoapods', '>= 1.0.0.beta.7'
 
   gem 'rspec'
   gem 'rubocop'
